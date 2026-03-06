@@ -192,6 +192,69 @@ Build custom detection logic with automated response actions.
     limacharlie dr delete --key my-new-rule --confirm
     ```
 
+### Enable / Disable a Rule
+
+=== "REST API"
+
+    ```bash
+    # 1. Read current metadata to preserve tags, expiry, comment:
+    CURRENT=$(curl -s -X GET \
+      "https://api.limacharlie.io/v1/hive/dr-general/YOUR_OID/my-rule/mtd" \
+      -H "Authorization: Bearer $LC_JWT")
+
+    # 2. Merge and update (set enabled to false, keep other fields):
+    curl -s -X POST "https://api.limacharlie.io/v1/hive/dr-general/YOUR_OID/my-rule/mtd" \
+      -H "Authorization: Bearer $LC_JWT" \
+      -H "Content-Type: application/x-www-form-urlencoded" \
+      -d 'usr_mtd={"enabled":false,"expiry":0,"tags":["my-tag"],"comment":"kept"}'
+    ```
+
+    !!! warning
+        The API **replaces** `usr_mtd` entirely. Sending only `{"enabled":false}` will reset tags, expiry, and comment to their defaults. Always read the current metadata first and resend all fields.
+
+=== "Python"
+
+    ```python
+    hive = Hive(org, "dr-general")
+    # Read-modify-write to preserve other metadata:
+    record = hive.get_metadata("my-rule")
+    record.enabled = False  # or True to re-enable
+    hive.set(record)
+    ```
+
+=== "Go"
+
+    ```go
+    hc := limacharlie.NewHiveClient(org)
+    // Read current metadata first to preserve tags, expiry, comment.
+    existing, _ := hc.GetMTD(limacharlie.HiveArgs{
+        HiveName:     "dr-general",
+        PartitionKey: org.GetOID(),
+        Key:          "my-rule",
+    })
+    enabled := false
+    hc.Add(limacharlie.HiveArgs{
+        HiveName:     "dr-general",
+        PartitionKey: org.GetOID(),
+        Key:          "my-rule",
+        Enabled:      &enabled,
+        Tags:         existing.UsrMtd.Tags,
+        Expiry:       &existing.UsrMtd.Expiry,
+        Comment:      &existing.UsrMtd.Comment,
+    })
+    ```
+
+=== "CLI"
+
+    ```bash
+    # Disable a rule (reads metadata first to preserve other fields):
+    limacharlie dr disable --key my-rule
+    # Re-enable:
+    limacharlie dr enable --key my-rule
+    # Or using the generic hive command:
+    limacharlie hive disable --hive-name dr-general --key my-rule
+    ```
+
 ### Test a Rule Against Sample Events
 
 === "REST API"

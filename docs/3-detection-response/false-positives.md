@@ -261,6 +261,69 @@ value: web-server-2
     limacharlie fp delete --key suppress-known-app --confirm
     ```
 
+### Enable / Disable an FP Rule
+
+=== "REST API"
+
+    ```bash
+    # 1. Read current metadata to preserve tags, expiry, comment:
+    CURRENT=$(curl -s -X GET \
+      "https://api.limacharlie.io/v1/hive/fp/YOUR_OID/suppress-known-app/mtd" \
+      -H "Authorization: Bearer $LC_JWT")
+
+    # 2. Merge and update (set enabled to false, keep other fields):
+    curl -s -X POST "https://api.limacharlie.io/v1/hive/fp/YOUR_OID/suppress-known-app/mtd" \
+      -H "Authorization: Bearer $LC_JWT" \
+      -H "Content-Type: application/x-www-form-urlencoded" \
+      -d 'usr_mtd={"enabled":false,"expiry":0,"tags":[],"comment":""}'
+    ```
+
+    !!! warning
+        The API **replaces** `usr_mtd` entirely. Sending only `{"enabled":false}` will reset tags, expiry, and comment to their defaults. Always read the current metadata first and resend all fields.
+
+=== "Python"
+
+    ```python
+    hive = Hive(org, "fp")
+    # Read-modify-write to preserve other metadata:
+    record = hive.get_metadata("suppress-known-app")
+    record.enabled = False  # or True to re-enable
+    hive.set(record)
+    ```
+
+=== "Go"
+
+    ```go
+    hc := limacharlie.NewHiveClient(org)
+    // Read current metadata first to preserve tags, expiry, comment.
+    existing, _ := hc.GetMTD(limacharlie.HiveArgs{
+        HiveName:     "fp",
+        PartitionKey: org.GetOID(),
+        Key:          "suppress-known-app",
+    })
+    enabled := false
+    hc.Add(limacharlie.HiveArgs{
+        HiveName:     "fp",
+        PartitionKey: org.GetOID(),
+        Key:          "suppress-known-app",
+        Enabled:      &enabled,
+        Tags:         existing.UsrMtd.Tags,
+        Expiry:       &existing.UsrMtd.Expiry,
+        Comment:      &existing.UsrMtd.Comment,
+    })
+    ```
+
+=== "CLI"
+
+    ```bash
+    # Disable an FP rule (reads metadata first to preserve other fields):
+    limacharlie fp disable --key suppress-known-app
+    # Re-enable:
+    limacharlie fp enable --key suppress-known-app
+    # Or using the generic hive command:
+    limacharlie hive disable --hive-name fp --key suppress-known-app
+    ```
+
 ---
 
 ## See Also

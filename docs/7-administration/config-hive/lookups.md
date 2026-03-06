@@ -333,6 +333,69 @@ Lookups support three data formats: `lookup_data` (key-value pairs), `newline_co
     limacharlie lookup delete --key my-lookup --confirm
     ```
 
+### Enable / Disable a Lookup
+
+=== "REST API"
+
+    ```bash
+    # 1. Read current metadata to preserve tags, expiry, comment:
+    CURRENT=$(curl -s -X GET \
+      "https://api.limacharlie.io/v1/hive/lookup/YOUR_OID/my-lookup/mtd" \
+      -H "Authorization: Bearer $LC_JWT")
+
+    # 2. Merge and update (set enabled to false, keep other fields):
+    curl -s -X POST "https://api.limacharlie.io/v1/hive/lookup/YOUR_OID/my-lookup/mtd" \
+      -H "Authorization: Bearer $LC_JWT" \
+      -H "Content-Type: application/x-www-form-urlencoded" \
+      -d 'usr_mtd={"enabled":false,"expiry":0,"tags":[],"comment":""}'
+    ```
+
+    !!! warning
+        The API **replaces** `usr_mtd` entirely. Sending only `{"enabled":false}` will reset tags, expiry, and comment to their defaults. Always read the current metadata first and resend all fields.
+
+=== "Python"
+
+    ```python
+    hive = Hive(org, "lookup")
+    # Read-modify-write to preserve other metadata:
+    record = hive.get_metadata("my-lookup")
+    record.enabled = False  # or True to re-enable
+    hive.set(record)
+    ```
+
+=== "Go"
+
+    ```go
+    hc := limacharlie.NewHiveClient(org)
+    // Read current metadata first to preserve tags, expiry, comment.
+    existing, _ := hc.GetMTD(limacharlie.HiveArgs{
+        HiveName:     "lookup",
+        PartitionKey: org.GetOID(),
+        Key:          "my-lookup",
+    })
+    enabled := false
+    hc.Add(limacharlie.HiveArgs{
+        HiveName:     "lookup",
+        PartitionKey: org.GetOID(),
+        Key:          "my-lookup",
+        Enabled:      &enabled,
+        Tags:         existing.UsrMtd.Tags,
+        Expiry:       &existing.UsrMtd.Expiry,
+        Comment:      &existing.UsrMtd.Comment,
+    })
+    ```
+
+=== "CLI"
+
+    ```bash
+    # Disable a lookup (reads metadata first to preserve other fields):
+    limacharlie lookup disable --key my-lookup
+    # Re-enable:
+    limacharlie lookup enable --key my-lookup
+    # Or using the generic hive command:
+    limacharlie hive disable --hive-name lookup --key my-lookup
+    ```
+
 ## Example Lookup
 
 ```json
