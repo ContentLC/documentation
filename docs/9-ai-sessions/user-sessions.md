@@ -137,6 +137,9 @@ curl -X POST https://ai-sessions.limacharlie.io/v1/profiles \
 | `model` | string | Claude model to use |
 | `max_turns` | integer | Maximum conversation turns |
 | `max_budget_usd` | float | Maximum spend limit in USD |
+| `one_shot` | boolean | When `true`, session terminates after completing its initial work. Default: `false` for user sessions. |
+| `ttl_seconds` | integer | Maximum session lifetime in seconds |
+| `environment` | map | Environment variables passed to the session |
 | `mcp_servers` | map | MCP server configurations |
 
 ### Setting a Default Profile
@@ -163,20 +166,26 @@ curl -X POST https://ai-sessions.limacharlie.io/v1/sessions/{sessionId}/capture-
 
 | State | Description |
 |-------|-------------|
-| `pending` | Session is being created and provisioned |
+| `starting` | Session is being created and provisioned |
 | `running` | Session is active and accepting prompts |
-| `terminated` | Session ended normally or was terminated by user |
-| `failed` | Session encountered an error |
+| `ended` | Session has terminated (see `end_reason` for details) |
 
-### Termination Reasons
+Idle sessions are automatically hibernated and resumed transparently — they continue to appear as `running` during hibernation and resume automatically when you send a new message.
+
+### End Reasons
+
+When a session enters the `ended` state, the `end_reason` field indicates why:
 
 | Reason | Description |
 |--------|-------------|
+| `completed` | Session completed its task normally |
+| `failed` | Session encountered an execution error |
+| `job_completed` | Session runner process exited |
 | `user_requested` | User terminated the session |
-| `completed` | Session completed its task |
-| `process_crashed` | Claude process crashed unexpectedly |
-| `timeout` | Session exceeded time limit |
-| `cancelled` | Session was cancelled by the system |
+| `org_api_requested` | Session was terminated via the org API |
+| `max_duration_exceeded` | Session exceeded its maximum duration |
+| `startup_timeout` | Session failed to start within the allowed time |
+| `heartbeat_stale` | Lost connection to the session runner |
 
 ### Terminating a Session
 
@@ -307,9 +316,10 @@ Claude: Here's how to create a D&R rule for detecting PowerShell
 
 ### Session Management
 
-- **Terminate idle sessions**: Sessions consume resources; terminate when done
+- **Terminate when done**: Idle sessions are automatically hibernated to save resources, but explicitly terminating sessions you no longer need is still recommended
 - **Use profiles**: Save common configurations for quick session creation
 - **Set resource limits**: Use `max_turns` and `max_budget_usd` to control costs
+- **Expect resume latency**: After a period of inactivity, your session may be hibernated. The first message after hibernation may take longer as the session resumes
 
 ### Security
 

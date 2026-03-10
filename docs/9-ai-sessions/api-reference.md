@@ -87,7 +87,7 @@ GET /v1/sessions
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `status` | string | Filter by status: `pending`, `running`, `terminated`, `failed` |
+| `status` | string | Filter by status: `starting`, `running`, `ended` |
 | `limit` | integer | Max results (default 50, max 200) |
 | `cursor` | string | Pagination cursor |
 
@@ -133,7 +133,7 @@ POST /v1/sessions
 {
   "session": {
     "id": "abc123",
-    "status": "pending",
+    "status": "starting",
     "region": "us-central1",
     "created_at": "2025-01-15T10:30:00Z"
   }
@@ -161,7 +161,7 @@ GET /v1/sessions/{sessionId}
     "created_at": "2025-01-15T10:30:00Z",
     "started_at": "2025-01-15T10:30:05Z",
     "terminated_at": null,
-    "termination_reason": null,
+    "end_reason": null,
     "exit_code": null,
     "error_message": null,
     "allowed_tools": ["Bash", "Read"],
@@ -189,7 +189,7 @@ DELETE /v1/sessions/{sessionId}
 DELETE /v1/sessions/{sessionId}/record
 ```
 
-Delete a terminated session from history. Only terminated or failed sessions can be deleted.
+Delete a terminated session from history. Only sessions in the `ended` state can be deleted.
 
 **Response: 200 OK**
 ```json
@@ -734,7 +734,7 @@ Session status update.
 
 #### session_end
 
-Session has terminated.
+Session has ended.
 
 ```json
 {
@@ -747,12 +747,15 @@ Session has terminated.
 }
 ```
 
-**Termination Reasons:**
+**End Reasons:**
 - `completed`: Session completed normally
+- `failed`: Session encountered an execution error
+- `job_completed`: Session runner process exited
 - `user_requested`: User terminated the session
-- `timeout`: Session timed out
-- `process_crashed`: Claude process crashed
-- `cancelled`: Session was cancelled
+- `org_api_requested`: Session was terminated via the org API
+- `max_duration_exceeded`: Session exceeded its maximum duration
+- `startup_timeout`: Session failed to start within the allowed time
+- `heartbeat_stale`: Lost connection to the session runner
 
 #### session_error
 
@@ -869,8 +872,8 @@ const createResp = await fetch(`${baseUrl}/v1/sessions`, {
 const { session } = await createResp.json();
 
 // 2. Wait for session to be running
-let status = 'pending';
-while (status === 'pending') {
+let status = 'starting';
+while (status === 'starting') {
   await new Promise(r => setTimeout(r, 1000));
   const resp = await fetch(`${baseUrl}/v1/sessions/${session.id}`, {
     headers: { 'Authorization': `Bearer ${jwt}` }
